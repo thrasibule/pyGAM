@@ -27,16 +27,17 @@ def derivative(n, coef, derivative=2, periodic=False):
 
     Returns
     -------
-    penalty matrix : sparse csc matrix of shape (n,n)
+    penalty matrix : sparse csc array of shape (n,n)
     """
     if n == 1:
         # no derivative for constant functions
-        return sp.sparse.csc_matrix(0.0)
+        return sp.sparse.csc_array((1, 1))
     D = sparse_diff(
-        sp.sparse.identity(n + 2 * derivative * periodic).tocsc(), n=derivative
-    ).tolil()
+        sp.sparse.eye_array(n + 2 * derivative * periodic, format="csc"), n=derivative
+    )
 
     if periodic:
+        D = D.tolil()
         # wrap penalty
         cols = D[:, :derivative]
         D[:, -2 * derivative : -derivative] += cols * (-1) ** derivative
@@ -47,7 +48,8 @@ def derivative(n, coef, derivative=2, periodic=False):
 
         # keep only the center of the augmented matrix
         D = D[derivative:-derivative, derivative:-derivative]
-    return D.dot(D.T).tocsc()
+    D = D.tocsc()
+    return D.dot(D.T)
 
 
 def periodic(n, coef, derivative=2, _penalty=derivative):
@@ -69,9 +71,9 @@ def l2(n, coef):
 
     Returns
     -------
-    penalty matrix : sparse csc matrix of shape (n,n)
+    penalty matrix : sparse csc array of shape (n,n)
     """
-    return sp.sparse.eye(n).tocsc()
+    return sp.sparse.eye_array(n, format="csc")
 
 
 def monotonicity_(n, coef, increasing=True):
@@ -99,18 +101,18 @@ def monotonicity_(n, coef, increasing=True):
 
     if n == 1:
         # no monotonic penalty for constant functions
-        return sp.sparse.csc_matrix(0.0)
+        return sp.sparse.csc_array((1, 1))
 
     if increasing:
         # only penalize the case where coef_i-1 > coef_i
-        mask = sp.sparse.diags((np.diff(coef.ravel()) < 0).astype(float))
+        mask = sp.sparse.diags_array((np.diff(coef.ravel()) < 0).astype(float))
     else:
         # only penalize the case where coef_i-1 < coef_i
-        mask = sp.sparse.diags((np.diff(coef.ravel()) > 0).astype(float))
+        mask = sp.sparse.diags_array((np.diff(coef.ravel()) > 0).astype(float))
 
     derivative = 1
-    D = sparse_diff(sp.sparse.identity(n).tocsc(), n=derivative) * mask
-    return D.dot(D.T).tocsc()
+    D = sparse_diff(sp.sparse.eye_array(n, format="csc"), n=derivative) @ mask
+    return D.dot(D.T)
 
 
 def monotonic_inc(n, coef):
@@ -145,7 +147,7 @@ def monotonic_dec(n, coef):
 
     Returns
     -------
-    penalty matrix : sparse csc matrix of shape (n,n)
+    penalty matrix : sparse csc array of shape (n,n)
     """
     return monotonicity_(n, coef, increasing=False)
 
@@ -165,7 +167,7 @@ def convexity_(n, coef, convex=True):
         whether to enforce convex, or concave functions
     Returns
     -------
-    penalty matrix : sparse csc matrix of shape (n,n)
+    penalty matrix : sparse csc array of shape (n,n)
     """
     if n != len(coef.ravel()):
         raise ValueError(
@@ -175,16 +177,16 @@ def convexity_(n, coef, convex=True):
 
     if n == 1:
         # no convex penalty for constant functions
-        return sp.sparse.csc_matrix(0.0)
+        return sp.sparse.csc_array((1, 1))
 
     if convex:
-        mask = sp.sparse.diags((np.diff(coef.ravel(), n=2) < 0).astype(float))
+        mask = sp.sparse.diags_array((np.diff(coef.ravel(), n=2) < 0).astype(float))
     else:
-        mask = sp.sparse.diags((np.diff(coef.ravel(), n=2) > 0).astype(float))
+        mask = sp.sparse.diags_array((np.diff(coef.ravel(), n=2) > 0).astype(float))
 
     derivative = 2
-    D = sparse_diff(sp.sparse.identity(n).tocsc(), n=derivative) * mask
-    return D.dot(D.T).tocsc()
+    D = sparse_diff(sp.sparse.eye_array(n, format="csc"), n=derivative) @ mask
+    return D.dot(D.T)
 
 
 def convex(n, coef):
@@ -201,7 +203,7 @@ def convex(n, coef):
 
     Returns
     -------
-    penalty matrix : sparse csc matrix of shape (n,n)
+    penalty matrix : sparse csc array of shape (n,n)
     """
     return convexity_(n, coef, convex=True)
 
@@ -220,7 +222,7 @@ def concave(n, coef):
 
     Returns
     -------
-    penalty matrix : sparse csc matrix of shape (n,n)
+    penalty matrix : sparse csc array of shape (n,n)
     """
     return convexity_(n, coef, convex=False)
 
@@ -272,7 +274,7 @@ def none(n, coef):
     -------
     penalty matrix : sparse csc matrix of shape (n,n)
     """
-    return sp.sparse.csc_matrix(np.zeros((n, n)))
+    return sp.sparse.csc_array((n, n))
 
 
 def wrap_penalty(p, fit_linear, linear_penalty=0.0):

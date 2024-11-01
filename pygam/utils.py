@@ -28,7 +28,7 @@ class OptimizationError(ValueError):
     """Exception class to raise if PIRLS optimization fails"""
 
 
-def cholesky(A, sparse=True, verbose=True):  # noqa: F811
+def cholesky(A, sparse=True, verbose=True, beta=0.0):  # noqa: F811
     """
     Choose the best possible cholesky factorizor.
 
@@ -47,24 +47,21 @@ def cholesky(A, sparse=True, verbose=True):  # noqa: F811
         whether to print warnings
     """
     if SKSPIMPORT:
-        A = sp.sparse.csc_matrix(A)
+        A = sp.sparse.csc_array(A)
         try:
-            F = spcholesky(A)
-
-            # permutation matrix P
-            P = sp.sparse.lil_matrix(A.shape)
-            p = F.P()
-            P[np.arange(len(p)), p] = 1
-
-            # permute
+            F = spcholesky(A, beta)
             L = F.L()
-            L = P.T.dot(L)
+            p = F.P()
+            #compute inverse permutation
+            q = np.empty(p.shape[0], np.int64)
+            q[p] = np.arange(p.shape[0], dtype=np.int64)
+            L = L[q,:]
         except CholmodNotPositiveDefiniteError:
             raise NotPositiveDefiniteError('Matrix is not positive definite')
 
         if sparse:
             return L.T  # upper triangular factorization
-        return L.T.A  # upper triangular factorization
+        return L.T.toarray()  # upper triangular factorization
 
     else:
         msg = (
@@ -78,7 +75,7 @@ def cholesky(A, sparse=True, verbose=True):  # noqa: F811
             warnings.warn(msg)
 
         if sp.sparse.issparse(A):
-            A = A.A
+            A = A.toarray()
 
         try:
             L = sp.linalg.cholesky(A, lower=False)
@@ -86,7 +83,7 @@ def cholesky(A, sparse=True, verbose=True):  # noqa: F811
             raise NotPositiveDefiniteError('Matrix is not positive definite')
 
         if sparse:
-            return sp.sparse.csc_matrix(L)
+            return sp.sparse.csc_array(L)
         return L
 
 
@@ -776,7 +773,7 @@ def b_spline_basis(
     bases = bases[:-2]
 
     if sparse:
-        return sp.sparse.csc_matrix(bases)
+        return sp.sparse.csc_array(bases)
 
     return bases
 
@@ -951,10 +948,10 @@ def tensor_product(a, b, reshape=True):
         raise ValueError('both arguments must have the same number of samples')
 
     if sp.sparse.issparse(a):
-        a = a.A
+        a = a.toarray()
 
     if sp.sparse.issparse(b):
-        b = b.A
+        b = b.toarray()
 
     tensor = a[..., :, None] * b[..., None, :]
 

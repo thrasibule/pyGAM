@@ -508,7 +508,7 @@ class GAM(Core, MetaTermMixin):
         """
         # create appropriate-size diagonal matrix
         if sp.sparse.issparse(A):
-            diag = sp.sparse.eye(A.shape[0])
+            diag = sp.sparse.eye_array(A.shape[0])
         else:
             diag = np.eye(A.shape[0])
 
@@ -622,7 +622,7 @@ class GAM(Core, MetaTermMixin):
         -------
         weights : sp..sparse array of shape (n_samples, n_samples)
         """
-        return sp.sparse.diags(
+        return sp.sparse.diags_array(
             (
                 self.link.gradient(mu, self.distribution) ** 2
                 * self.distribution.V(mu=mu)
@@ -703,7 +703,7 @@ class GAM(Core, MetaTermMixin):
 
         # solve the linear problem
         return np.linalg.solve(
-            load_diagonal(modelmat.T.dot(modelmat).A), modelmat.T.dot(y_)
+            load_diagonal(modelmat.T.dot(modelmat)), modelmat.T.dot(y_)
         )
 
         # not sure if this is faster...
@@ -741,14 +741,13 @@ class GAM(Core, MetaTermMixin):
         assert np.isfinite(
             self.coef_
         ).all(), "coefficients should be well-behaved, but found: {}".format(self.coef_)
-
         P = self._P()
-        S = sp.sparse.diags(np.ones(m) * np.sqrt(EPS))  # improve condition
+        S = sp.sparse.diags_array(np.ones(m) * np.sqrt(EPS), format="csc")  # improve condition
         # S += self._H # add any user-chosen minumum penalty to the diagonal
 
         # if we dont have any constraints, then do cholesky now
         if not self.terms.hasconstraint:
-            E = self._cholesky(S + P, sparse=False, verbose=self.verbose)
+            E = self._cholesky(S + P, beta=0.0, sparse=False, verbose=self.verbose)
 
         min_n_m = np.min([m, n])
         Dinv = np.zeros((min_n_m + m, m)).T
@@ -758,7 +757,7 @@ class GAM(Core, MetaTermMixin):
             if self.terms.hasconstraint:
                 P = self._P()
                 C = self._C()
-                E = self._cholesky(S + P + C, sparse=False, verbose=self.verbose)
+                E = self._cholesky(S+P + C, beta=0.0, sparse=False, verbose=self.verbose)
 
             # forward pass
             y = deepcopy(Y)  # for simplicity
@@ -771,7 +770,7 @@ class GAM(Core, MetaTermMixin):
             y = y[mask]  # update
             lp = lp[mask]  # update
             mu = mu[mask]  # update
-            W = sp.sparse.diags(W.diagonal()[mask])  # update
+            W = sp.sparse.diags_array(W.diagonal()[mask])  # update
 
             # PIRLS Wood pg 183
             pseudo_data = W.dot(self._pseudo_data(y, lp, mu))
@@ -780,7 +779,7 @@ class GAM(Core, MetaTermMixin):
             self._on_loop_start(vars())
 
             WB = W.dot(modelmat[mask, :])  # common matrix product
-            Q, R = np.linalg.qr(WB.A)
+            Q, R = np.linalg.qr(WB.toarray())
 
             if not np.isfinite(Q).all() or not np.isfinite(R).all():
                 raise ValueError(
@@ -789,7 +788,6 @@ class GAM(Core, MetaTermMixin):
 
             # need to recompute the number of singular values
             min_n_m = np.min([m, n, mask.sum()])
-            Dinv = np.zeros((m, min_n_m))
 
             # SVD
             U, d, Vt = np.linalg.svd(np.vstack([R, E]))
@@ -797,11 +795,10 @@ class GAM(Core, MetaTermMixin):
             # mask out small singular values
             # svd_mask = d <= (d.max() * np.sqrt(EPS))
 
-            np.fill_diagonal(Dinv, d**-1)  # invert the singular values
             U1 = U[:min_n_m, :min_n_m]  # keep only top corner of U
 
             # update coefficients
-            B = Vt.T.dot(Dinv).dot(U1.T).dot(Q.T)
+            B = (Vt.T * d**-1)[:,:min_n_m] @ U1.T @ Q.T
             coef_new = B.dot(pseudo_data).flatten()
             diff = np.linalg.norm(self.coef_ - coef_new) / np.linalg.norm(coef_new)
             self.coef_ = coef_new  # update
@@ -1220,7 +1217,7 @@ class GAM(Core, MetaTermMixin):
             # scale is known, use UBRE
             scale = self.distribution.scale
             UBRE = (
-                1.0 / n * dev - (~add_scale) * (scale) + 2.0 * gamma / n * edof * scale
+                1.0 / n * dev - (not add_scale) * (scale) + 2.0 * gamma / n * edof * scale
             )
         else:
             # scale unkown, use GCV
@@ -1401,7 +1398,7 @@ class GAM(Core, MetaTermMixin):
         idxs = self.terms.get_coef_indices(term)
         cov = self.statistics_['cov'][idxs][:, idxs]
 
-        var = (modelmat.dot(cov) * modelmat.A).sum(axis=1)
+        var = (modelmat.dot(cov) * modelmat).sum(axis=1)
         if prediction:
             var += self.distribution.scale
 
