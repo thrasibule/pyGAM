@@ -23,13 +23,13 @@ def test_single_spline_penalty():
     monotonic_ and convexity_ should be 0.
     """
     coef = np.array(1.0)
-    assert np.alltrue(derivative(1, coef).A == 0.0)
-    assert np.alltrue(l2(1, coef).A == 1.0)
-    assert np.alltrue(monotonic_inc(1, coef).A == 0.0)
-    assert np.alltrue(monotonic_dec(1, coef).A == 0.0)
-    assert np.alltrue(convex(1, coef).A == 0.0)
-    assert np.alltrue(concave(1, coef).A == 0.0)
-    assert np.alltrue(none(1, coef).A == 0.0)
+    assert not np.any(derivative(1, coef) != 0.0)
+    assert np.all(l2(1, coef) == 1.0)
+    assert not np.any(monotonic_inc(1, coef) != 0.0)
+    assert not np.any(monotonic_dec(1, coef) != 0.0)
+    assert not np.any(convex(1, coef) != 0.0)
+    assert not np.any(concave(1, coef) != 0.0)
+    assert not np.any(none(1, coef) != 0.0)
 
 
 def test_wrap_penalty():
@@ -43,12 +43,12 @@ def test_wrap_penalty():
 
     fit_linear = True
     p = wrap_penalty(none, fit_linear, linear_penalty=linear_penalty)
-    P = p(n, coef).A
+    P = p(n, coef)
     assert P.sum() == linear_penalty
 
     fit_linear = False
     p = wrap_penalty(none, fit_linear, linear_penalty=linear_penalty)
-    P = p(n, coef).A
+    P = p(n, coef)
     assert P.sum() == 0.0
 
 
